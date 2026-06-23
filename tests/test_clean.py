@@ -1,4 +1,4 @@
-from rag_cleaner_cn.core.enums import ChunkStatus, NoiseType, RiskTag
+from rag_cleaner_cn.core.enums import ChunkStatus, DocumentStatus, NoiseType, RiskTag
 from rag_cleaner_cn.core.pipeline import CleaningPipeline
 
 
@@ -323,6 +323,67 @@ def test_course_launch_prompt_is_dropped_without_dropping_training_analysis():
     assert result.manifest.dropped_segments == 1
     assert "已经发车" not in text
     assert "训练营里的复盘方法" in text
+
+
+def test_training_conversion_tail_is_dropped_without_dropping_sales_body():
+    result = run_text(
+        """# 竞争项目中到底要不要说竞争对手的坏话？
+
+在竞争项目中，不要为了迎合客户而诋毁竞争对手。更好的做法是用客观标准帮助客户判断局面。
+
+PART3、正式介绍下大客户销售训练营
+
+大客户销售训练营正式开始招生了。
+
+价格：2499元，预约价1999元。
+
+预约通道戳下面二维码即可。"""
+    )
+
+    text = result.chunks[0].embedding_text_main
+    assert "不要为了迎合客户而诋毁竞争对手" in text
+    assert "正式开始招生" not in text
+    assert "2499" not in text
+    assert "二维码" not in text
+
+
+def test_short_training_registration_notice_is_dropped():
+    result = run_text(
+        """19期，明天开放报名。
+
+识别客户是否有决策权，要看他能否调动预算、影响流程和承担责任。"""
+    )
+
+    text = result.chunks[0].embedding_text_main
+    assert result.manifest.dropped_segments == 1
+    assert "明天开放报名" not in text
+    assert "调动预算" in text
+
+
+def test_sales_agent_keeps_customer_wechat_action():
+    result = run_text("添加客户微信后，要定期在朋友圈发布行业动态，通过这种方式提醒客户你的存在。")
+
+    assert result.manifest.dropped_segments == 0
+    assert "添加客户微信后" in result.chunks[0].embedding_text_main
+
+
+def test_sales_agent_keeps_following_customer_moments_and_replies():
+    result = run_text("添加客户微信后，要关注客户朋友圈里的采购动态，并及时回复客户的问题。")
+
+    assert result.manifest.dropped_segments == 0
+    assert "关注客户朋友圈" in result.chunks[0].embedding_text_main
+    assert "回复客户的问题" in result.chunks[0].embedding_text_main
+
+
+def test_document_level_training_ad_is_excluded_by_title():
+    result = CleaningPipeline.default().run_text(
+        "课程很好，社群很值，欢迎报名。",
+        metadata={"title": "【9月 第20期 】正式开放报名 14天后开营"},
+    )
+
+    assert result.chunks == []
+    assert result.manifest.document_status == DocumentStatus.EXCLUDE
+    assert result.manifest.dropped_segments >= 1
 
 
 def test_short_useful_claim_is_imported_as_short_chunk():

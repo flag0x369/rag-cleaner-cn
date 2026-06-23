@@ -34,6 +34,8 @@ _KNOWLEDGE_SIGNALS = (
     "筛选",
     "分析",
     "判断",
+    "建联",
+    "触达",
 )
 
 
@@ -95,6 +97,8 @@ def _is_pure_wechat_noise(text: str, rules: dict[str, Any]) -> bool:
 def _is_pure_marketing(text: str, rules: dict[str, Any]) -> bool:
     if not _is_short_noise(text, rules):
         return False
+    if _is_sales_action_context(text):
+        return False
     return _matches_any(text, rules.get("marketing_patterns", []))
 
 
@@ -117,6 +121,33 @@ def _is_classroom_noise(text: str, rules: dict[str, Any]) -> bool:
     if not _is_short_noise(text, rules):
         return False
     return _matches_any(text, rules.get("classroom_noise_patterns", []))
+
+
+def _is_sales_action_context(text: str) -> bool:
+    """Keep sales tactics that mention contact channels without conversion intent."""
+
+    if "客户" not in text:
+        return False
+    if not re.search(r"(微信|电话|联系方式|建联|触达|拜访)", text):
+        return False
+    conversion_terms = (
+        "领取",
+        "扫码",
+        "二维码",
+        "回复666",
+        "关注公众号",
+        "关注我",
+        "关注本号",
+        "点个关注",
+        "添加我",
+        "加我",
+        "个人微信",
+        "报名",
+        "预约",
+        "优惠",
+        "课程",
+    )
+    return not any(term in text for term in conversion_terms)
 
 
 def _is_platform_unavailable_notice(text: str) -> bool:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from importlib import resources
 from pathlib import Path
@@ -9,7 +10,13 @@ import yaml
 
 from rag_cleaner_cn.chunk.semantic_chunker import build_chunks
 from rag_cleaner_cn.clean.cleaner import clean_segments
-from rag_cleaner_cn.core.enums import DocumentStatus, SourceType
+from rag_cleaner_cn.core.enums import (
+    DocumentStatus,
+    NoiseType,
+    QualityTag,
+    SegmentAction,
+    SourceType,
+)
 from rag_cleaner_cn.core.errors import OutputExistsError, UnsupportedInputError
 from rag_cleaner_cn.core.models import (
     CleanerConfig,
@@ -118,6 +125,18 @@ class CleaningPipeline:
         segments = segment_text(
             document.raw_text, doc_id=document.doc_id, transcript_cues=transcript_cues
         )
+        if _is_document_level_marketing(document, self.config.rules):
+            dropped_segments = _drop_all_segments(segments)
+            manifest = build_manifest(document, [], dropped_segments, [], [], [])
+            return PipelineResult(
+                document=document,
+                segments=[],
+                chunks=[],
+                repairs=[],
+                reviews=[],
+                manifest=manifest,
+                dropped=dropped_segments,
+            )
         kept_segments, dropped_segments = clean_segments(segments, self.config.rules)
         kept_segments, repairs = repair_segments(kept_segments, self.config)
         kept_segments = enhance_knowledge_structure(document, kept_segments)
@@ -220,6 +239,31 @@ def _read_packaged_yaml(filename: str) -> dict[str, Any]:
     package_files = resources.files("rag_cleaner_cn.config")
     with resources.as_file(package_files / filename) as path:
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def _is_document_level_marketing(document: SourceDocument, rules: dict[str, Any]) -> bool:
+    title = (document.title or "").strip()
+    if not title:
+        return False
+    return any(
+        re.search(pattern, title, flags=re.IGNORECASE)
+        for pattern in rules.get("document_marketing_title_patterns", [])
+    )
+
+
+def _drop_all_segments(segments):
+    dropped = []
+    for segment in segments:
+        segment.text_cleaned = None
+        segment.action = SegmentAction.DROP
+        segment.noise_type = NoiseType.MARKETING
+        segment.drop_reason = "整篇推广或转化内容"
+        segment.review_reason = None
+        segment.risk_tags = []
+        if QualityTag.MARKETING_REMOVED not in segment.quality_tags:
+            segment.quality_tags.append(QualityTag.MARKETING_REMOVED)
+        dropped.append(segment)
+    return dropped
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
