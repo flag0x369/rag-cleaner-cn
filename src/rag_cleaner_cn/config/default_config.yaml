@@ -1,0 +1,42 @@
+cleaning:
+  profile: conservative
+  preserve_original: true
+  drop_marketing: true
+  drop_footer: true
+  drop_copyright: true
+  drop_url_only: true
+  drop_image_placeholder: true
+  keep_short_useful: true
+
+repair:
+  enable_repair: true
+  enable_filler_word_removal: true
+  enable_repetition_compression: true
+  enable_punctuation_restore: true
+  enable_asr_homophone_fix: true
+  enable_ocr_character_fix: false
+  min_confidence: high
+
+chunking:
+  target_chunk_size_chars: 800
+  min_chunk_size_chars: 120
+  max_chunk_size_chars: 1500
+  overlap_chars: 120
+  add_section_path_to_text: true
+
+export:
+  clean_markdown: true
+  chunks_jsonl: true
+  manifest_json: true
+  repairs_jsonl: true
+  review_jsonl: true
+  dropped_jsonl: true
+
+embedding:
+  default_text_field: embedding_text_main
+  generate_expanded_text: false
+
+quality:
+  enable_quality_score: true
+  review_on_media_dependency: true
+  review_on_semantic_break: true
